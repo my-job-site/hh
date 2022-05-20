@@ -1,7 +1,7 @@
 import re
 from multiprocessing.pool import ThreadPool
 from time import sleep
-from typing import Iterable, Optional
+from typing import Iterable, List, Optional
 
 import requests
 from config import config
@@ -12,16 +12,18 @@ class Loader:
     alredy_sendet_vacancies = []
 
     @classmethod
+    def _parse_tags(cls, vacancy: dict) -> List[str]:
+        tags = re.findall("[a-zA-Z]{2,}", vacancy["description"] + " " + vacancy["name"])
+        return [t.lower() for t in tags if t != "highlighttext"]
+
+    @classmethod
     def _parse(cls, vacancy: dict) -> dict:
-        tags = re.findall("[a-zA-Z]{2,}", vacancy["snippet"]["requirement"] + " " + vacancy["name"])
-        tags = [t.lower() for t in tags if t != "highlighttext"]
         return dict(
             source_pk=vacancy["id"],
             name=vacancy["name"],
             description=vacancy["snippet"]["requirement"]
             .replace("<highlighttext>", "")
             .replace("</highlighttext>", ""),
-            tags=tags,
             source=config["MODULE_UUID"],
             price=vacancy.get("salary", {}).get("from") or 0,
             city=vacancy["area"]["name"],
@@ -38,7 +40,7 @@ class Loader:
             print(f"page {page}", flush=True)
             url = f"{cls.URL}?text={config['SEARCH_WORDS']}&only_with_salary=True&per_page=100&page={page}"
             data = requests.get(url).json()
-            # max_page = data["pages"]
+            max_page = data["pages"]
             for vacancy in data.get("items", []):
                 if not vacancy["snippet"]["requirement"]:
                     continue
@@ -60,6 +62,7 @@ class Loader:
             print(f"{data['source_pk']} already sendet", flush=True)
             return
         data["description"] = cls._get_description(data["source_pk"]) or data["description"]
+        data["tags"] = cls._parse_tags(data)
         cls.alredy_sendet_vacancies.append(data["source_pk"])
         headers = {"Authorization": f"Token {config['TOKEN']}"}
         response = requests.post(config["URL"], json=data, headers=headers)
