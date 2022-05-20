@@ -1,7 +1,7 @@
 import re
 from multiprocessing.pool import ThreadPool
 from time import sleep
-from typing import Iterable
+from typing import Iterable, Optional
 
 import requests
 from config import config
@@ -18,7 +18,9 @@ class Loader:
         return dict(
             id=vacancy["id"],
             name=vacancy["name"],
-            description=vacancy["snippet"]["requirement"],
+            description=vacancy["snippet"]["requirement"]
+            .replace("<highlighttext>", "")
+            .replace("</highlighttext>", ""),
             tags=tags,
             source=config["MODULE_UUID"],
             price=vacancy.get("salary", {}).get("from") or 0,
@@ -42,12 +44,22 @@ class Loader:
                     continue
                 yield cls._parse(vacancy)
             page += 1
+            sleep(int(config["SLEEP_BETWEEN_PAGE"]))
+
+    @classmethod
+    def _get_description(cls, vacancy_id: int) -> Optional[str]:
+        sleep(int(config["SLEEP_BETWEEN_PAGE"]))
+        try:
+            return requests.get(f"{cls.URL}/{vacancy_id}").json().get("description")
+        finally:
+            return None
 
     @classmethod
     def _send(cls, data):
         if data["id"] in cls.alredy_sendet_vacancies:
             print(f"{data['id']} already sendet")
             return
+        data["description"] = cls._get_description(data["id"]) or data["description"]
         cls.alredy_sendet_vacancies.append(data.pop("id"))
         headers = {"Authorization": f"Token {config['TOKEN']}"}
         response = requests.post(config["URL"], json=data, headers=headers)
