@@ -16,7 +16,7 @@ class Loader:
         tags = re.findall("[a-zA-Z]{2,}", vacancy["snippet"]["requirement"] + " " + vacancy["name"])
         tags = [t.lower() for t in tags if t != "highlighttext"]
         return dict(
-            id=vacancy["id"],
+            source_pk=vacancy["id"],
             name=vacancy["name"],
             description=vacancy["snippet"]["requirement"]
             .replace("<highlighttext>", "")
@@ -35,10 +35,10 @@ class Loader:
         while True:
             if page >= max_page:
                 break
-            print(f"page {page}")
+            print(f"page {page}", flush=True)
             url = f"{cls.URL}?text={config['SEARCH_WORDS']}&only_with_salary=True&per_page=100&page={page}"
             data = requests.get(url).json()
-            max_page = data["pages"]
+            # max_page = data["pages"]
             for vacancy in data.get("items", []):
                 if not vacancy["snippet"]["requirement"]:
                     continue
@@ -51,19 +51,19 @@ class Loader:
         sleep(int(config["SLEEP_BETWEEN_PAGE"]))
         try:
             return requests.get(f"{cls.URL}/{vacancy_id}").json().get("description")
-        finally:
+        except:
             return None
 
     @classmethod
     def _send(cls, data):
-        if data["id"] in cls.alredy_sendet_vacancies:
-            print(f"{data['id']} already sendet")
+        if data["source_pk"] in cls.alredy_sendet_vacancies:
+            print(f"{data['source_pk']} already sendet", flush=True)
             return
-        data["description"] = cls._get_description(data["id"]) or data["description"]
-        cls.alredy_sendet_vacancies.append(data.pop("id"))
+        data["description"] = cls._get_description(data["source_pk"]) or data["description"]
+        cls.alredy_sendet_vacancies.append(data["source_pk"])
         headers = {"Authorization": f"Token {config['TOKEN']}"}
         response = requests.post(config["URL"], json=data, headers=headers)
-        print(f"{response.status_code} {response.text}")
+        print(f"{response.status_code} {response.text}", flush=True)
 
     @classmethod
     def run(cls):
